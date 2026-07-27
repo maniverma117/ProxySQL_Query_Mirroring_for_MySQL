@@ -1,43 +1,39 @@
 # ProxySQL Query Mirroring for MySQL Buffer Pool Warm-up
 
-1. Overview
+## Overview
 
-2. Architecture
+This guide explains how to deploy ProxySQL using Docker and configure query mirroring so that all production SELECT queries are executed on both the existing Read Replica and the new Read Replica.
 
-3. Directory Structure
-
-4. Docker Compose
-
-5. ProxySQL Configuration
-
-6. Start ProxySQL
-
-7. Configure Backend Servers
-
-8. Configure Monitor User
-
-9. Configure Application User
-
-10. Configure Mirror Rule
-
-11. Validation
-
-12. Monitoring
-
-13. Buffer Pool Validation
-
-14. Rollback
-
-15. Troubleshooting
-
+- Existing Read Replica (Hostgroup 10) serves the application response.
+- New Read Replica (Hostgroup 20) executes mirrored queries only to warm the InnoDB Buffer Pool.
+- No application changes are required.
 
 ---
 
-## Directory Structure
+# Architecture
 
-```text
+                    Applications
+                          |
+                          |
+                     MySQL Protocol
+                          |
+                    +-------------+
+                    |  ProxySQL   |
+                    +------+------+
+                           |
+             +-------------+-------------+
+             |                           |
+             |                           |
+     Existing Read Replica        New Read Replica
+        (Hostgroup 10)             (Hostgroup 20)
+      Application Response       Mirror Only
+
+---
+
+# Directory Structure
+
+```
 proxysql-mirror/
-
 ├── docker-compose.yml
 ├── README.md
 └── proxysql/
@@ -45,19 +41,14 @@ proxysql-mirror/
     └── data/
 ```
 
-Everything stays inside one directory.
-
 ---
 
-## Docker Compose
-
-We'll make it production ready.
+# Docker Compose
 
 ```yaml
 version: "3.9"
 
 services:
-
   proxysql:
     image: proxysql/proxysql:2.7.3
     container_name: proxysql
@@ -85,21 +76,19 @@ services:
         max-file: "5"
 ```
 
-The `./proxysql/data` directory will contain the persistent ProxySQL SQLite database. All `SAVE ... TO DISK` commands write to this database, so your configuration survives container restarts.
-
 ---
 
-## proxysql.cnf
+# ProxySQL Configuration
 
+`proxysql/proxysql.cnf`
 
+```ini
 datadir="/var/lib/proxysql"
 
 admin_variables=
 {
     admin_credentials="admin:admin"
-
     mysql_ifaces="0.0.0.0:6032"
-
     refresh_interval=2000
 }
 
@@ -116,35 +105,99 @@ mysql_variables=
     interfaces="0.0.0.0:6033"
 
     monitor_username="monitor"
-
     monitor_password="monitor"
 
     ping_interval_server_msec=1000
-
     ping_timeout_server=200
 
     monitor_history=600000
-
     monitor_connect_interval=60000
-
     monitor_ping_interval=10000
-
     monitor_read_only_interval=1500
 
     connect_timeout_server=3000
-
     monitor_connect_timeout=600
 
     shun_on_failures=5
-
     shun_recovery_time_sec=10
 }
+```
 
 ---
 
+# Deploy ProxySQL
 
+Start ProxySQL
 
-### Add Existing Read Replica
+```bash
+docker compose up -d
+```
+
+Verify container
+
+```bash
+docker ps
+```
+
+View logs
+
+```bash
+docker logs -f proxysql
+```
+
+---
+
+# Login to ProxySQL
+
+## Admin Interface
+
+Port **6032** is used for administration.
+
+```bash
+mysql \
+-h127.0.0.1 \
+-P6032 \
+-uadmin \
+-padmin
+```
+
+---
+
+## MySQL Client Interface
+
+Port **6033** is used by applications.
+
+```bash
+mysql \
+-h127.0.0.1 \
+-P6033 \
+-uappuser \
+-pYourPassword
+```
+
+At this point the login will fail because no backend servers or users have been configured yet.
+
+Continue with the next steps.
+
+---
+
+# Create Monitor User on Both MySQL Servers
+
+Execute on both replicas.
+
+```sql
+CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
+
+GRANT USAGE ON *.* TO 'monitor'@'%';
+
+FLUSH PRIVILEGES;
+```
+
+---
+
+# Configure Backend Servers
+
+Add Existing Read Replica
 
 ```sql
 INSERT INTO mysql_servers
@@ -157,13 +210,13 @@ INSERT INTO mysql_servers
 VALUES
 (
     10,
-    '10.0.10.25',
+    'OLD_REPLICA_IP',
     3306,
     'Existing Read Replica'
 );
 ```
 
-### Add New Read Replica
+Add New Read Replica
 
 ```sql
 INSERT INTO mysql_servers
@@ -176,22 +229,38 @@ INSERT INTO mysql_servers
 VALUES
 (
     20,
-    '10.0.20.15',
+    'NEW_REPLICA_IP',
     3306,
     'New Read Replica'
 );
 ```
 
-Then
+Apply configuration
 
 ```sql
 LOAD MYSQL SERVERS TO RUNTIME;
 SAVE MYSQL SERVERS TO DISK;
 ```
 
+Verify
+
+```sql
+SELECT *
+FROM mysql_servers;
+```
+
+Verify runtime
+
+```sql
+SELECT *
+FROM runtime_mysql_servers;
+```
+
+Both servers should be **ONLINE**.
+
 ---
 
-## Configure Application User
+# Configure Application User
 
 ```sql
 INSERT INTO mysql_users
@@ -204,20 +273,26 @@ INSERT INTO mysql_users
 VALUES
 (
     'appuser',
-    'password',
+    'AppPassword',
     10,
     1
 );
 
 LOAD MYSQL USERS TO RUNTIME;
+
 SAVE MYSQL USERS TO DISK;
+```
+
+Verify
+
+```sql
+SELECT *
+FROM mysql_users;
 ```
 
 ---
 
-## Configure Mirror Rule
-
-Exactly the rule that worked in your POC:
+# Configure Query Mirroring
 
 ```sql
 INSERT INTO mysql_query_rules
@@ -242,40 +317,82 @@ VALUES
 );
 
 LOAD MYSQL QUERY RULES TO RUNTIME;
+
 SAVE MYSQL QUERY RULES TO DISK;
 ```
 
----
-
-## Monitor User
-
-Since your lab showed repeated `Access denied for user 'monitor'`, the README will also include creating the monitor account on **both** MySQL servers.
+Verify
 
 ```sql
-CREATE USER 'monitor'@'%' IDENTIFIED BY 'monitor';
-
-GRANT USAGE ON *.* TO 'monitor'@'%';
-
-FLUSH PRIVILEGES;
+SELECT *
+FROM mysql_query_rules;
 ```
 
 ---
 
-## Validation
+# Test ProxySQL
 
-Exactly the commands we used during the POC:
+Connect through ProxySQL
 
-* `SELECT @@hostname;`
-* Enable General Log on both replicas
-* Verify mirrored `SELECT` appears on both
-* Different-data test (`OLD` vs `NEW`)
-* Stop `mysql-new` and verify client still works
+```bash
+mysql \
+-h127.0.0.1 \
+-P6033 \
+-uappuser \
+-pAppPassword
+```
+
+Run
+
+```sql
+SELECT @@hostname;
+
+SELECT NOW();
+```
+
+Expected:
+
+- Client receives response from **Hostgroup 10**.
+- Same SELECT is mirrored to **Hostgroup 20**.
 
 ---
 
-## Monitoring
+# Validation
 
-Useful ProxySQL queries:
+## Enable General Log (Lab Only)
+
+Execute on both MySQL servers
+
+```sql
+SET GLOBAL general_log=ON;
+SET GLOBAL log_output='FILE';
+```
+
+Tail logs
+
+```bash
+tail -f /var/lib/mysql/general.log
+```
+
+Execute
+
+```sql
+SELECT NOW();
+
+SELECT * FROM users;
+```
+
+Expected:
+
+- Query appears in **mysql-old**
+- Query appears in **mysql-new**
+- Client receives only one response
+
+---
+
+# Monitoring
+
+## ProxySQL
 
 ```sql
 SELECT * FROM mysql_servers;
@@ -288,16 +405,10 @@ SELECT * FROM mysql_query_rules;
 
 SELECT * FROM runtime_mysql_query_rules;
 
-SELECT *
-FROM stats_mysql_connection_pool;
-
-SELECT *
-FROM stats_mysql_query_digest
-ORDER BY count_star DESC
-LIMIT 20;
+SELECT * FROM stats_mysql_query_digest;
 ```
 
-And MySQL commands:
+## MySQL
 
 ```sql
 SHOW PROCESSLIST;
@@ -326,23 +437,25 @@ SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_read_requests';
 
 ---
 
-## Rollback
+# Rollback
+
+Disable mirroring
 
 ```sql
 UPDATE mysql_query_rules
-SET active = 0
-WHERE rule_id = 1;
+SET active=0
+WHERE rule_id=1;
 
 LOAD MYSQL QUERY RULES TO RUNTIME;
 
 SAVE MYSQL QUERY RULES TO DISK;
 ```
 
-or
+Or remove the rule completely
 
 ```sql
 DELETE FROM mysql_query_rules
-WHERE rule_id = 1;
+WHERE rule_id=1;
 
 LOAD MYSQL QUERY RULES TO RUNTIME;
 
