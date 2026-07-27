@@ -91,13 +91,58 @@ The `./proxysql/data` directory will contain the persistent ProxySQL SQLite data
 
 ## proxysql.cnf
 
-We'll use the exact configuration you tested, with only production-safe defaults where appropriate.
+
+datadir="/var/lib/proxysql"
+
+admin_variables=
+{
+    admin_credentials="admin:admin"
+
+    mysql_ifaces="0.0.0.0:6032"
+
+    refresh_interval=2000
+}
+
+mysql_variables=
+{
+    threads=4
+
+    max_connections=4096
+
+    default_query_delay=0
+
+    default_query_timeout=36000000
+
+    interfaces="0.0.0.0:6033"
+
+    monitor_username="monitor"
+
+    monitor_password="monitor"
+
+    ping_interval_server_msec=1000
+
+    ping_timeout_server=200
+
+    monitor_history=600000
+
+    monitor_connect_interval=60000
+
+    monitor_ping_interval=10000
+
+    monitor_read_only_interval=1500
+
+    connect_timeout_server=3000
+
+    monitor_connect_timeout=600
+
+    shun_on_failures=5
+
+    shun_recovery_time_sec=10
+}
 
 ---
 
-## Production Setup
 
-The README will include every command, for example:
 
 ### Add Existing Read Replica
 
