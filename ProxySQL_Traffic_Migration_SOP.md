@@ -392,6 +392,14 @@ Also check ProxySQL:
 SELECT
     hostgroup,
     srv_host,
+    Queries
+FROM stats_mysql_connection_pool
+WHERE hostgroup = 30;
+
+
+SELECT
+    hostgroup,
+    srv_host,
     ConnOK,
     ConnERR,
     Queries
