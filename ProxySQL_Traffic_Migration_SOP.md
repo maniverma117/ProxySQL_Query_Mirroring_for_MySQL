@@ -235,6 +235,9 @@ default_hostgroup = 30
 For example:
 
 ```sql
+SELECT *
+FROM mysql_users;
+
 SELECT
     username,
     active,
@@ -246,6 +249,9 @@ WHERE username = 'pocuser';
 If the production application user already exists, update it:
 
 ```sql
+SELECT *
+FROM mysql_users;
+
 UPDATE mysql_users
 SET default_hostgroup = 30
 WHERE username = 'YOUR_APP_USER';
