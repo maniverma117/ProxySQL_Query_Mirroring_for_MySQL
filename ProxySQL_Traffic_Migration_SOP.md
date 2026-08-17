@@ -789,3 +789,69 @@ NEXT     ROLLBACK
 ```
 
 **One important operational point:** don't interpret the weights as an exact SQL-query percentage. They control ProxySQL's backend selection/connection distribution. Your earlier 50-connection test producing **44 OLD / 6 NEW** with weights 9/1 is exactly the kind of approximate distribution we should expect.
+
+
+## ProxySQL max_connections
+
+### Check current values
+
+```sql
+SELECT
+    hostgroup_id,
+    hostname,
+    max_connections
+FROM mysql_servers
+WHERE hostgroup_id IN (10, 20, 30)
+ORDER BY hostgroup_id, hostname;
+```
+
+### Change 1000 → 2000
+
+```sql
+UPDATE mysql_servers
+SET max_connections = 2000
+WHERE hostgroup_id IN (10, 20, 30);
+```
+
+### Load into runtime
+
+```sql
+LOAD MYSQL SERVERS TO RUNTIME;
+```
+
+### Persist across ProxySQL restart
+
+```sql
+SAVE MYSQL SERVERS TO DISK;
+```
+
+### Verify runtime
+
+```sql
+SELECT
+    hostgroup_id,
+    hostname,
+    port,
+    status,
+    weight,
+    max_connections
+FROM runtime_mysql_servers
+WHERE hostgroup_id IN (10, 20, 30)
+ORDER BY hostgroup_id, hostname;
+```
+
+You should see:
+
+```text
++--------------+-----------+------+--------+--------+-----------------+
+| hostgroup_id | hostname  | port | status | weight | max_connections |
++--------------+-----------+------+--------+--------+-----------------+
+| 10           | mysql-old | 3306 | ONLINE | 1      | 2000            |
+| 20           | mysql-new | 3306 | ONLINE | 1      | 2000            |
+| 30           | mysql-new | 3306 | ONLINE | ...    | 2000            |
+| 30           | mysql-old | 3306 | ONLINE | ...    | 2000            |
++--------------+-----------+------+--------+--------+-----------------+
+```
+
+**Important:** `max_connections=2000` in ProxySQL is the maximum backend connections ProxySQL is allowed to use for that server entry. It does **not** increase MySQL's own `max_connections`. Make sure the actual MySQL instances can handle the potential connection load before raising this limit.
+
