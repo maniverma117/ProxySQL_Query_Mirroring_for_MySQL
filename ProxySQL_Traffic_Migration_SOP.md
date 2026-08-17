@@ -411,8 +411,58 @@ SELECT
     Queries
 FROM stats_mysql_connection_pool
 WHERE hostgroup = 30;
+
+
+SELECT
+    hostgroup,
+    username,
+    digest_text,
+    count_star,
+    ROUND(sum_time / count_star, 2) AS avg_us,
+    min_time,
+    max_time
+FROM stats_mysql_query_digest
+WHERE hostgroup IN (10, 20, 30)
+  AND username = 'appuser'
+ORDER BY digest_text, hostgroup;
 ```
 
+```
+-- 1. Backend health
+SELECT
+    hostgroup,
+    srv_host,
+    Queries,
+    ConnOK,
+    ConnERR,
+    Latency_us
+FROM stats_mysql_connection_pool
+WHERE hostgroup = 30;
+
+-- 2. Current weights
+SELECT
+    hostgroup_id,
+    hostname,
+    status,
+    weight
+FROM runtime_mysql_servers
+WHERE hostgroup_id = 30;
+
+-- 3. Application query performance
+SELECT
+    hostgroup,
+    username,
+    digest_text,
+    count_star,
+    ROUND(sum_time / count_star, 2) AS avg_us,
+    min_time,
+    max_time
+FROM stats_mysql_query_digest
+WHERE hostgroup = 30
+  AND username = 'appuser'
+ORDER BY count_star DESC;
+
+```
 ---
 
 # 7. Move to 95% OLD / 5% NEW
