@@ -352,6 +352,17 @@ mysql-new    0
 Use a controlled test first:
 
 ```bash
+for i in $(seq 1 1000); do
+  mysql \
+    -h127.0.0.1 \
+    -P6033 \
+    -upocuser \
+    -ppoc123 \
+    -N \
+    -e "SELECT @@hostname;" 2>/dev/null
+done | sort | uniq -c
+
+
 for i in $(seq 1 100); do
     mysql \
       -h127.0.0.1 \
@@ -433,6 +444,14 @@ mysql-new     5
 Run:
 
 ```sql
+SELECT
+    hostgroup,
+    srv_host,
+    Queries
+FROM stats_mysql_connection_pool
+WHERE hostgroup = 30;
+
+
 SELECT
     hostgroup,
     srv_host,
