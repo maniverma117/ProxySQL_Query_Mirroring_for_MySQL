@@ -428,7 +428,7 @@ ORDER BY digest_text, hostgroup;
 ```
 
 ```
--- 1. Backend health
+*** 1. Backend health ***
 SELECT
     hostgroup,
     srv_host,
@@ -439,7 +439,7 @@ SELECT
 FROM stats_mysql_connection_pool
 WHERE hostgroup = 30;
 
--- 2. Current weights
+***2. Current weights ***
 SELECT
     hostgroup_id,
     hostname,
@@ -448,7 +448,7 @@ SELECT
 FROM runtime_mysql_servers
 WHERE hostgroup_id = 30;
 
--- 3. Application query performance
+*** 3. Application query performance ***
 SELECT
     hostgroup,
     username,
