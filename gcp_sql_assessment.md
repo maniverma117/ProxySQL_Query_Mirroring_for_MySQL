@@ -1,8 +1,4 @@
-Exactly. For the customer, don't ask for 40 metrics. Give them **one small SQL collection script** that they can run on the GCP Cloud SQL primary and send you the output.
-
-I'd collect **current configuration + database size + workload counters + InnoDB + binlog + replication-related information**.
-
-## 1. Give customer this SQL script
+# 1. Give customer this SQL script
 
 They can run it on the **GCP Cloud SQL primary**.
 
