@@ -8,7 +8,7 @@ This guide shows how to add one database endpoint and its dedicated ProxySQL log
 
 ```bash
 docker exec -it proxysql bash
-mysql -h127.0.0.1 -P6032 -uadmin -p
+mysql -h127.0.0.1 -P6032 -uadmin -padmin
 ```
 
 Enter the ProxySQL Admin password when prompted. Avoid putting passwords directly in shell commands.
